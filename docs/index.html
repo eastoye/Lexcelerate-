@@ -8,13 +8,15 @@
   <link rel="manifest" href="manifest.json" />
 </head>
 <body>
+  <!-- Notification Div (hidden by default) -->
+  <div id="notification" style="display:none; position:fixed; top:10px; right:10px; background:#007BFF; color:#fff; padding:10px; border-radius:5px;"></div>
+
   <!-- Login Screen -->
   <div id="login-screen" class="screen" style="display: none;">
     <h2>Sign In to Lexcelerate</h2>
     <input type="text" id="login-username" placeholder="Username" />
     <input type="password" id="login-password" placeholder="Password" />
     <button id="login-btn">Sign In</button>
-    <!-- For simplicity, if a new user, they can sign in with any username/password -->
   </div>
 
   <!-- Home Screen -->
@@ -38,7 +40,11 @@
   <!-- Practice Screen -->
   <div id="practice-screen" class="screen" style="display: none;">
     <h2>Practice Spelling</h2>
-    <div id="prompt"></div>
+    <!-- The prompt area shows the covered word -->
+    <div id="prompt" style="cursor:pointer;"></div>
+    <!-- Sound toggle button -->
+    <button id="sound-toggle-btn">Sound: ON</button>
+    <!-- Talk button remains available -->
     <button id="talk-btn">Talk</button>
     <input type="text" id="spell-input" placeholder="Spell the word" />
     <button id="submit-spelling-btn">Submit</button>

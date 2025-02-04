@@ -2,34 +2,22 @@
 // Global Variables for User & Catalogue
 // ---------------------------
 
-// Get the current user from localStorage (if logged in)
 let currentUser = localStorage.getItem('currentUser');
-// Global variable for the current user’s word catalogue
-let wordCatalogue = [];
+let wordCatalogue = []; // This will be loaded per user
 
 // Load the current user’s catalogue from localStorage (or initialize it)
 function loadUserCatalogue() {
   if (currentUser) {
     const key = "wordCatalogue_" + currentUser;
     wordCatalogue = JSON.parse(localStorage.getItem(key)) || [];
-    // If words were stored as strings, convert them to objects with stats.
-    if (wordCatalogue.length > 0 && typeof wordCatalogue[0] === "string") {
-      wordCatalogue = wordCatalogue.map(word => ({
-        word: word,
-        totalAttempts: 0,
-        correctFirstTryCount: 0,
-        mistakes: {},
-        nextReview: Date.now(),
-        interval: 1
-      }));
-    } else {
-      // Ensure every word object has the spaced repetition properties.
-      wordCatalogue.forEach(wordObj => {
-        if (!wordObj.mistakes) wordObj.mistakes = {};
-        if (!wordObj.nextReview) wordObj.nextReview = Date.now();
-        if (!wordObj.interval) wordObj.interval = 1;
-      });
-    }
+    // Ensure each word object has required properties (including ranking: score and streak)
+    wordCatalogue.forEach(wordObj => {
+      if (typeof wordObj.score !== 'number') wordObj.score = 0;  // ranking score, default 0
+      if (typeof wordObj.streak !== 'number') wordObj.streak = 0;
+      if (!wordObj.mistakes) wordObj.mistakes = {};
+      if (!wordObj.nextReview) wordObj.nextReview = Date.now();
+      if (!wordObj.interval) wordObj.interval = 1;
+    });
     saveCatalogue();
   }
 }
@@ -43,14 +31,23 @@ function saveCatalogue() {
 }
 
 // ---------------------------
+// Notification Function (Non-blocking)
+// ---------------------------
+function showNotification(message) {
+  const notif = document.getElementById('notification');
+  notif.textContent = message;
+  notif.style.display = 'block';
+  setTimeout(() => {
+    notif.style.display = 'none';
+  }, 2000); // 2 seconds
+}
+
+// ---------------------------
 // Login / Authentication Section
 // ---------------------------
-
-// Check if a user is logged in; if not, show the login screen.
 function checkLogin() {
   currentUser = localStorage.getItem('currentUser');
   if (currentUser) {
-    // Load this user’s catalogue.
     loadUserCatalogue();
     showScreen('home-screen');
   } else {
@@ -58,7 +55,6 @@ function checkLogin() {
   }
 }
 
-// Event listener for the login button.
 document.getElementById('login-btn').addEventListener('click', () => {
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value.trim();
@@ -66,17 +62,14 @@ document.getElementById('login-btn').addEventListener('click', () => {
     alert("Please enter both a username and password.");
     return;
   }
-  // For this simple example, any username/password is accepted.
   localStorage.setItem('currentUser', username);
   currentUser = username;
   loadUserCatalogue();
   showScreen('home-screen');
 });
 
-// Log Out functionality.
 document.getElementById('logout-btn').addEventListener('click', () => {
   localStorage.removeItem('currentUser');
-  // Optionally, you might clear the user's catalogue from memory.
   wordCatalogue = [];
   currentUser = null;
   showScreen('login-screen');
@@ -85,20 +78,16 @@ document.getElementById('logout-btn').addEventListener('click', () => {
 // ---------------------------
 // Helper Functions for Lexcelerate
 // ---------------------------
-
-// Returns a string of underscores matching the length of the word.
 function getCoveredWord(word) {
   return "_".repeat(word.length);
 }
 
-// Naively split the word into syllable-like chunks using a regex heuristic.
 function splitWordIntoSyllables(word) {
   let syllables = word.match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy]+|$)/gi);
   return syllables ? syllables : [word];
 }
 
 // Generate a syllable-based hint that reveals one more syllable per extra wrong attempt.
-// For example, on the third wrong attempt reveal the first syllable; on the fourth, the first two, etc.
 function generateSyllableHint(word, attemptCount) {
   let syllables = splitWordIntoSyllables(word);
   let syllablesToReveal = Math.min(attemptCount - 2, syllables.length);
@@ -109,17 +98,15 @@ function generateSyllableHint(word, attemptCount) {
 }
 
 // ---------------------------
-// Global Variables for Practice Session
+// Global Variables for Practice Session & Sound Toggle
 // ---------------------------
-
 let attemptCount = 0;
 let currentWordObj = null;
+let soundEnabled = true; // Default: sound is ON
 
 // ---------------------------
 // Progress & Navigation Functions
 // ---------------------------
-
-// Update the progress summary on the Home screen.
 function updateProgressSummary() {
   const summaryDiv = document.getElementById('progress-summary');
   let totalAttempts = 0;
@@ -132,7 +119,6 @@ function updateProgressSummary() {
   summaryDiv.textContent = `Overall First-Attempt Accuracy: ${progress}%`;
 }
 
-// Generate the statistics list HTML for the stats screen.
 function updateStatsList() {
   const statsListDiv = document.getElementById('stats-list');
   let html = '';
@@ -143,7 +129,8 @@ function updateStatsList() {
       html += `<div class="word-stat">
                 <h3>${wordObj.word}</h3>
                 <p>Total Attempts: ${wordObj.totalAttempts}</p>
-                <p>Correct on First Try: ${wordObj.correctFirstTryCount}</p>`;
+                <p>Correct on First Try: ${wordObj.correctFirstTryCount}</p>
+                <p>Score: ${wordObj.score}</p>`;
       if (Object.keys(wordObj.mistakes).length > 0) {
         html += `<p>Mistakes:</p><ul>`;
         for (let mistake in wordObj.mistakes) {
@@ -159,7 +146,6 @@ function updateStatsList() {
   statsListDiv.innerHTML = html;
 }
 
-// Handle navigation between screens.
 function showScreen(screenId) {
   document.querySelectorAll('.screen, #home-screen, #login-screen').forEach(screen => {
     screen.style.display = 'none';
@@ -174,9 +160,8 @@ function showScreen(screenId) {
 }
 
 // ---------------------------
-// Navigation Event Listeners (for screens)
+// Navigation Event Listeners
 // ---------------------------
-
 document.getElementById('add-word-btn').addEventListener('click', () => {
   showScreen('add-word-screen');
 });
@@ -198,24 +183,26 @@ document.querySelectorAll('.back-btn').forEach(button => {
 });
 
 // ---------------------------
-// Add Word Functionality
+// Add Word Functionality (with Ranking Properties)
 // ---------------------------
-
 document.getElementById('save-word-btn').addEventListener('click', () => {
   const wordInput = document.getElementById('word-input');
   const word = wordInput.value.trim();
   if (word !== "") {
+    // Initialize new word with ranking properties: score and streak.
     wordCatalogue.push({
       word: word,
       totalAttempts: 0,
       correctFirstTryCount: 0,
       mistakes: {},
       nextReview: Date.now(),
-      interval: 1
+      interval: 1,
+      score: 0,     // Ranking score (0-100; lower means less known)
+      streak: 0     // Correct answer streak for this word
     });
     saveCatalogue();
     wordInput.value = '';
-    alert(`Word "${word}" added!`);
+    showNotification(`"${word}" added`);
     updateProgressSummary();
   } else {
     alert('Please enter a valid word.');
@@ -223,36 +210,38 @@ document.getElementById('save-word-btn').addEventListener('click', () => {
 });
 
 // ---------------------------
-// Adaptive Learning with Spaced Repetition
+// Adaptive Learning with Ranking System
 // ---------------------------
-
-// Choose a word that is due for review. If none are due, choose the one with the earliest nextReview.
+// Here, we use each word's score to determine its weight.
+// Lower-scoring words (harder words) should appear more frequently.
+// For example, weight = (maxScore + 1) - score, where maxScore is 100.
+const maxScore = 100;
 function getRandomWord() {
   let now = Date.now();
-  let dueWords = wordCatalogue.filter(wordObj => !wordObj.nextReview || wordObj.nextReview <= now);
-  if (dueWords.length === 0) {
-    let earliest = wordCatalogue.reduce((prev, curr) => (prev.nextReview < curr.nextReview ? prev : curr));
-    dueWords = [earliest];
-  }
+  // (You could combine spaced repetition by filtering due words if desired.
+  // For simplicity, we use the ranking system here.)
   let totalWeight = 0;
   let weights = [];
-  dueWords.forEach(wordObj => {
-    let weight = 1 + (wordObj.totalAttempts - wordObj.correctFirstTryCount);
+  wordCatalogue.forEach(wordObj => {
+    // Weight formula: higher score gives lower weight.
+    let weight = (maxScore + 1) - wordObj.score; // if score is 0 => weight=101; if score=100 => weight=1
     weights.push(weight);
     totalWeight += weight;
   });
   let random = Math.random() * totalWeight;
   let cumulative = 0;
-  for (let i = 0; i < dueWords.length; i++) {
+  for (let i = 0; i < wordCatalogue.length; i++) {
     cumulative += weights[i];
     if (random < cumulative) {
-      return dueWords[i];
+      return wordCatalogue[i];
     }
   }
-  return dueWords[0];
+  return wordCatalogue[0];
 }
 
-// Load a word for practice and speak it aloud.
+// ---------------------------
+// Load Practice Word & Sound Toggle / Reveal Functionality
+// ---------------------------
 function loadPracticeWord() {
   currentWordObj = getRandomWord();
   let actualWord = currentWordObj.word;
@@ -260,15 +249,44 @@ function loadPracticeWord() {
   document.getElementById('feedback').textContent = '';
   document.getElementById('spell-input').value = '';
   attemptCount = 0;
-  const utterance = new SpeechSynthesisUtterance(actualWord);
-  speechSynthesis.speak(utterance);
+  // If sound is enabled, auto-speak the word.
+  if (soundEnabled) {
+    const utterance = new SpeechSynthesisUtterance(actualWord);
+    speechSynthesis.speak(utterance);
+  }
+  // Ensure text input is enabled.
+  document.getElementById('spell-input').disabled = false;
 }
 
 // ---------------------------
-// Practice Area Buttons & Enter-Key Submission
+// Sound Toggle Button
 // ---------------------------
+document.getElementById('sound-toggle-btn').addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  document.getElementById('sound-toggle-btn').textContent = soundEnabled ? "Sound: ON" : "Sound: OFF";
+});
 
-// Talk button: speaks the actual word.
+// ---------------------------
+// Reveal Word on Prompt Tap (Only when Sound is OFF)
+// ---------------------------
+document.getElementById('prompt').addEventListener('click', () => {
+  if (!soundEnabled && currentWordObj) {
+    // Reveal the actual word temporarily
+    document.getElementById('prompt').textContent = currentWordObj.word;
+    // Clear and disable the text input so the user cannot type while word is revealed.
+    const spellInput = document.getElementById('spell-input');
+    spellInput.value = "";
+    spellInput.disabled = true;
+    // After 3 seconds, re-hide the word and re-enable typing.
+    setTimeout(() => {
+      document.getElementById('prompt').textContent = getCoveredWord(currentWordObj.word);
+      spellInput.disabled = false;
+    }, 3000);
+  }
+});
+
+// ---------------------------
+// Talk Button (Always speaks the word)
 document.getElementById('talk-btn').addEventListener('click', () => {
   const wordToSpeak = currentWordObj ? currentWordObj.word : "";
   if (!wordToSpeak) {
@@ -279,7 +297,8 @@ document.getElementById('talk-btn').addEventListener('click', () => {
   speechSynthesis.speak(utterance);
 });
 
-// Allow pressing Enter in the input field to submit the attempt.
+// ---------------------------
+// Allow pressing Enter in the input field to submit.
 document.getElementById('spell-input').addEventListener('keydown', function(event) {
   if (event.key === 'Enter') {
     event.preventDefault();
@@ -288,9 +307,8 @@ document.getElementById('spell-input').addEventListener('keydown', function(even
 });
 
 // ---------------------------
-// Practice Submission Handler
+// Practice Submission Handler with Ranking Updates
 // ---------------------------
-
 document.getElementById('submit-spelling-btn').addEventListener('click', () => {
   let actualWord = currentWordObj.word;
   const userSpelling = document.getElementById('spell-input').value.trim();
@@ -299,17 +317,23 @@ document.getElementById('submit-spelling-btn').addEventListener('click', () => {
   if (userSpelling.toLowerCase() === actualWord.toLowerCase()) {
     feedbackEl.textContent = "Correct!";
     currentWordObj.totalAttempts++;
+    
+    // Update ranking: Increase streak and add points based on streak.
+    currentWordObj.streak++;
+    if (currentWordObj.streak >= 10) {
+      currentWordObj.score += 5;
+    } else if (currentWordObj.streak >= 5) {
+      currentWordObj.score += 2;
+    } else {
+      currentWordObj.score += 1;
+    }
+    // Clamp score to maxScore
+    if (currentWordObj.score > maxScore) currentWordObj.score = maxScore;
+    
+    // Increase correct first-try count if no mistakes this round.
     if (attemptCount === 0) {
       currentWordObj.correctFirstTryCount++;
     }
-    // Update spaced repetition properties.
-    let now = Date.now();
-    if (attemptCount === 0) {
-      currentWordObj.interval = currentWordObj.interval ? currentWordObj.interval * 2 : 1;
-    } else {
-      currentWordObj.interval = 1;
-    }
-    currentWordObj.nextReview = now + currentWordObj.interval * 24 * 60 * 60 * 1000;
     saveCatalogue();
     updateProgressSummary();
     setTimeout(loadPracticeWord, 1500);
@@ -324,7 +348,17 @@ document.getElementById('submit-spelling-btn').addEventListener('click', () => {
     if (attemptLower !== actualWord.toLowerCase()) {
       currentWordObj.mistakes[attemptLower] = (currentWordObj.mistakes[attemptLower] || 0) + 1;
     }
+    // Update ranking: Reset streak and subtract points.
+    currentWordObj.streak = 0;
+    if (currentWordObj.score > 60) {
+      currentWordObj.score -= 2;
+    } else {
+      currentWordObj.score -= 1;
+    }
+    // Clamp score so it doesn’t go below 0.
+    if (currentWordObj.score < 0) currentWordObj.score = 0;
     saveCatalogue();
+    
     if (attemptCount < 3) {
       document.getElementById('prompt').textContent = getCoveredWord(actualWord);
     } else {
